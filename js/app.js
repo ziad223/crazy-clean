@@ -14,60 +14,139 @@ const state = {
 };
 
 // --- Web Audio Synthesizer ---
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+let audioCtx = null;
+
+function getAudioCtx() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  return audioCtx;
+}
 
 function playPopSound() {
   if (!state.audioEnabled) return;
   try {
-    if (audioCtx.state === 'suspended') {
-      audioCtx.resume();
+    const ctx = getAudioCtx();
+    if (ctx.state === 'suspended') {
+      ctx.resume();
     }
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
     
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(400, audioCtx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(800, audioCtx.currentTime + 0.08);
+    osc.frequency.setValueAtTime(400, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(800, ctx.currentTime + 0.08);
     
-    gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.08);
+    gain.gain.setValueAtTime(0.3, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.08);
     
     osc.connect(gain);
-    gain.connect(audioCtx.destination);
+    gain.connect(ctx.destination);
     
     osc.start();
-    osc.stop(audioCtx.currentTime + 0.08);
+    osc.stop(ctx.currentTime + 0.08);
   } catch (e) {}
 }
 
 function playSpraySound() {
   if (!state.audioEnabled) return;
   try {
-    if (audioCtx.state === 'suspended') audioCtx.resume();
-    const bufferSize = audioCtx.sampleRate * 0.1;
-    const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+    const ctx = getAudioCtx();
+    if (ctx.state === 'suspended') ctx.resume();
+    const bufferSize = ctx.sampleRate * 0.1;
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
     const data = buffer.getChannelData(0);
     for (let i = 0; i < bufferSize; i++) {
       data[i] = Math.random() * 2 - 1;
     }
     
-    const noise = audioCtx.createBufferSource();
+    const noise = ctx.createBufferSource();
     noise.buffer = buffer;
     
-    const filter = audioCtx.createBiquadFilter();
+    const filter = ctx.createBiquadFilter();
     filter.type = 'bandpass';
     filter.frequency.value = 3000;
     
-    const gain = audioCtx.createGain();
-    gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
     
     noise.connect(filter);
     filter.connect(gain);
-    gain.connect(audioCtx.destination);
+    gain.connect(ctx.destination);
     
     noise.start();
   } catch(e) {}
+}
+
+// --- Live Offer Countdown Timer (Bulletproof Remote Execution) ---
+function initOfferTimer() {
+  try {
+    const daysEl = document.getElementById('offerDays');
+    const hoursEl = document.getElementById('offerHours');
+    const minutesEl = document.getElementById('offerMinutes');
+    const secondsEl = document.getElementById('offerSeconds');
+    if (!daysEl || !hoursEl || !minutesEl || !secondsEl) return;
+    
+    if (window._offerTimerInterval) {
+      clearInterval(window._offerTimerInterval);
+    }
+    
+    // 6 Days + 14 Hours + 42 Minutes + 18 Seconds countdown
+    let totalSeconds = 6 * 24 * 3600 + 14 * 3600 + 42 * 60 + 18;
+    
+    function updateTimer() {
+      if (totalSeconds <= 0) {
+        totalSeconds = 6 * 24 * 3600;
+      } else {
+        totalSeconds--;
+      }
+      
+      const d = Math.floor(totalSeconds / (24 * 3600));
+      const h = Math.floor((totalSeconds % (24 * 3600)) / 3600);
+      const m = Math.floor((totalSeconds % 3600) / 60);
+      const s = totalSeconds % 60;
+      
+      daysEl.innerText = String(d).padStart(2, '0');
+      hoursEl.innerText = String(h).padStart(2, '0');
+      minutesEl.innerText = String(m).padStart(2, '0');
+      secondsEl.innerText = String(s).padStart(2, '0');
+    }
+
+    // Run once immediately so digits update instantly on load
+    updateTimer();
+    window._offerTimerInterval = setInterval(updateTimer, 1000);
+
+    const addBundleBtn = document.getElementById('addFamilyBundleBtn');
+    if (addBundleBtn) {
+      addBundleBtn.onclick = function() {
+        playPopSound();
+        const bundleItem = {
+          name: 'باقة كرازي كلين العائلية الشاملة (4 منتجات + خصم 25%)',
+          price: 85000,
+          image: 'images/laundry.png',
+          qty: 1
+        };
+        
+        const existing = state.cart.find(i => i.name === bundleItem.name);
+        if (existing) {
+          existing.qty++;
+        } else {
+          state.cart.push(bundleItem);
+        }
+        
+        const cartDrawer = document.getElementById('cartDrawer');
+        const cartOverlay = document.getElementById('cartOverlay');
+        if (cartDrawer) cartDrawer.classList.remove('translate-x-full');
+        if (cartOverlay) cartOverlay.classList.remove('hidden');
+        
+        const cartToggleBtn = document.querySelector('.cart-toggle-btn');
+        if (cartToggleBtn) cartToggleBtn.click();
+      };
+    }
+  } catch (err) {
+    console.error('Offer timer error:', err);
+  }
 }
 
 // --- Mobile Navigation Menu ---
@@ -239,6 +318,7 @@ function initStainScrubber() {
   let isScrubbing = false;
   
   function resizeCanvas() {
+    if (!container.clientWidth || !container.clientHeight) return;
     canvas.width = container.clientWidth;
     canvas.height = container.clientHeight;
     drawStainLayer();
@@ -247,6 +327,7 @@ function initStainScrubber() {
   function drawStainLayer() {
     const w = canvas.width;
     const h = canvas.height;
+    if (!w || !h) return;
     
     ctx.globalCompositeOperation = 'source-over';
     
@@ -306,6 +387,7 @@ function initStainScrubber() {
     try {
       const w = canvas.width;
       const h = canvas.height;
+      if (!w || !h) return;
       const imgData = ctx.getImageData(0, 0, w, h).data;
       let erasedCount = 0;
       const sampleStep = 16;
@@ -465,68 +547,6 @@ function initScentSelector() {
   });
 }
 
-// --- Live Offer Countdown Timer ---
-function initOfferTimer() {
-  const daysEl = document.getElementById('offerDays');
-  const hoursEl = document.getElementById('offerHours');
-  const minutesEl = document.getElementById('offerMinutes');
-  const secondsEl = document.getElementById('offerSeconds');
-  if (!daysEl || !hoursEl || !minutesEl || !secondsEl) return;
-  
-  // 6 Days + 14 Hours + 42 Minutes + 18 Seconds countdown
-  let totalSeconds = 6 * 24 * 3600 + 14 * 3600 + 42 * 60 + 18;
-  
-  setInterval(() => {
-    if (totalSeconds <= 0) {
-      totalSeconds = 6 * 24 * 3600; // Reset to 6 days
-    } else {
-      totalSeconds--;
-    }
-    
-    const d = Math.floor(totalSeconds / (24 * 3600));
-    const h = Math.floor((totalSeconds % (24 * 3600)) / 3600);
-    const m = Math.floor((totalSeconds % 3600) / 60);
-    const s = totalSeconds % 60;
-    
-    daysEl.innerText = String(d).padStart(2, '0');
-    hoursEl.innerText = String(h).padStart(2, '0');
-    minutesEl.innerText = String(m).padStart(2, '0');
-    secondsEl.innerText = String(s).padStart(2, '0');
-  }, 1000);
-  
-  // Add Family Bundle button listener
-  const addBundleBtn = document.getElementById('addFamilyBundleBtn');
-  if (addBundleBtn) {
-    addBundleBtn.addEventListener('click', () => {
-      playPopSound();
-      // Add all 4 products as bundle
-      const bundleItem = {
-        name: 'باقة كرازي كلين العائلية الشاملة (4 منتجات + خصم 25%)',
-        price: 85000,
-        image: 'images/laundry.png',
-        qty: 1
-      };
-      
-      const existing = state.cart.find(i => i.name === bundleItem.name);
-      if (existing) {
-        existing.qty++;
-      } else {
-        state.cart.push(bundleItem);
-      }
-      
-      // Trigger cart drawer open
-      const cartDrawer = document.getElementById('cartDrawer');
-      const cartOverlay = document.getElementById('cartOverlay');
-      if (cartDrawer) cartDrawer.classList.remove('translate-x-full');
-      if (cartOverlay) cartOverlay.classList.remove('hidden');
-      
-      // Update UI
-      const cartToggleBtn = document.querySelector('.cart-toggle-btn');
-      if (cartToggleBtn) cartToggleBtn.click();
-    });
-  }
-}
-
 // --- FAQ Accordion Interactivity ---
 function initFaqAccordion() {
   const faqItems = document.querySelectorAll('.faq-item');
@@ -540,7 +560,6 @@ function initFaqAccordion() {
       playPopSound();
       const isOpen = !content.classList.contains('hidden');
       
-      // Close all
       document.querySelectorAll('.faq-content').forEach(c => c.classList.add('hidden'));
       document.querySelectorAll('.faq-icon').forEach(i => i.className = 'fas fa-chevron-down faq-icon text-cyan-400 transition-transform');
       
@@ -706,15 +725,31 @@ function initSoundToggle() {
   });
 }
 
-// --- Initialize All Modules on DOM Load ---
-document.addEventListener('DOMContentLoaded', () => {
-  initMobileMenu();
-  initBubbleCanvas();
-  initStainScrubber();
-  initDosageCalculator();
-  initScentSelector();
-  initOfferTimer();
-  initFaqAccordion();
-  initCartSystem();
-  initSoundToggle();
-});
+// --- Bulletproof Module Initialization Architecture ---
+function runSafeInit() {
+  const modules = [
+    { name: 'initOfferTimer', fn: initOfferTimer },
+    { name: 'initMobileMenu', fn: initMobileMenu },
+    { name: 'initBubbleCanvas', fn: initBubbleCanvas },
+    { name: 'initStainScrubber', fn: initStainScrubber },
+    { name: 'initDosageCalculator', fn: initDosageCalculator },
+    { name: 'initScentSelector', fn: initScentSelector },
+    { name: 'initFaqAccordion', fn: initFaqAccordion },
+    { name: 'initCartSystem', fn: initCartSystem },
+    { name: 'initSoundToggle', fn: initSoundToggle }
+  ];
+
+  modules.forEach(m => {
+    try {
+      m.fn();
+    } catch (e) {
+      console.warn(`Module ${m.name} warning:`, e);
+    }
+  });
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', runSafeInit);
+} else {
+  runSafeInit();
+}
