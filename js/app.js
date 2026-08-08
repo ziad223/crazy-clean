@@ -87,7 +87,6 @@ function initMobileMenu() {
     }
   });
   
-  // Close menu when clicking any nav link
   const mobileLinks = mobileNavMenu.querySelectorAll('a');
   mobileLinks.forEach(link => {
     link.addEventListener('click', () => {
@@ -466,6 +465,93 @@ function initScentSelector() {
   });
 }
 
+// --- Live Offer Countdown Timer ---
+function initOfferTimer() {
+  const daysEl = document.getElementById('offerDays');
+  const hoursEl = document.getElementById('offerHours');
+  const minutesEl = document.getElementById('offerMinutes');
+  const secondsEl = document.getElementById('offerSeconds');
+  if (!daysEl || !hoursEl || !minutesEl || !secondsEl) return;
+  
+  // 6 Days + 14 Hours + 42 Minutes + 18 Seconds countdown
+  let totalSeconds = 6 * 24 * 3600 + 14 * 3600 + 42 * 60 + 18;
+  
+  setInterval(() => {
+    if (totalSeconds <= 0) {
+      totalSeconds = 6 * 24 * 3600; // Reset to 6 days
+    } else {
+      totalSeconds--;
+    }
+    
+    const d = Math.floor(totalSeconds / (24 * 3600));
+    const h = Math.floor((totalSeconds % (24 * 3600)) / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
+    const s = totalSeconds % 60;
+    
+    daysEl.innerText = String(d).padStart(2, '0');
+    hoursEl.innerText = String(h).padStart(2, '0');
+    minutesEl.innerText = String(m).padStart(2, '0');
+    secondsEl.innerText = String(s).padStart(2, '0');
+  }, 1000);
+  
+  // Add Family Bundle button listener
+  const addBundleBtn = document.getElementById('addFamilyBundleBtn');
+  if (addBundleBtn) {
+    addBundleBtn.addEventListener('click', () => {
+      playPopSound();
+      // Add all 4 products as bundle
+      const bundleItem = {
+        name: 'باقة كرازي كلين العائلية الشاملة (4 منتجات + خصم 25%)',
+        price: 85000,
+        image: 'images/laundry.png',
+        qty: 1
+      };
+      
+      const existing = state.cart.find(i => i.name === bundleItem.name);
+      if (existing) {
+        existing.qty++;
+      } else {
+        state.cart.push(bundleItem);
+      }
+      
+      // Trigger cart drawer open
+      const cartDrawer = document.getElementById('cartDrawer');
+      const cartOverlay = document.getElementById('cartOverlay');
+      if (cartDrawer) cartDrawer.classList.remove('translate-x-full');
+      if (cartOverlay) cartOverlay.classList.remove('hidden');
+      
+      // Update UI
+      const cartToggleBtn = document.querySelector('.cart-toggle-btn');
+      if (cartToggleBtn) cartToggleBtn.click();
+    });
+  }
+}
+
+// --- FAQ Accordion Interactivity ---
+function initFaqAccordion() {
+  const faqItems = document.querySelectorAll('.faq-item');
+  faqItems.forEach(item => {
+    const btn = item.querySelector('.faq-header');
+    const content = item.querySelector('.faq-content');
+    const icon = item.querySelector('.faq-icon');
+    if (!btn || !content) return;
+    
+    btn.addEventListener('click', () => {
+      playPopSound();
+      const isOpen = !content.classList.contains('hidden');
+      
+      // Close all
+      document.querySelectorAll('.faq-content').forEach(c => c.classList.add('hidden'));
+      document.querySelectorAll('.faq-icon').forEach(i => i.className = 'fas fa-chevron-down faq-icon text-cyan-400 transition-transform');
+      
+      if (!isOpen) {
+        content.classList.remove('hidden');
+        if (icon) icon.className = 'fas fa-chevron-up faq-icon text-cyan-400 transition-transform';
+      }
+    });
+  });
+}
+
 // --- WhatsApp Order Cart System ---
 function initCartSystem() {
   const cartToggleBtns = document.querySelectorAll('.cart-toggle-btn');
@@ -627,6 +713,8 @@ document.addEventListener('DOMContentLoaded', () => {
   initStainScrubber();
   initDosageCalculator();
   initScentSelector();
+  initOfferTimer();
+  initFaqAccordion();
   initCartSystem();
   initSoundToggle();
 });
